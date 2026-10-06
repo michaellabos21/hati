@@ -28,3 +28,21 @@ export function useRecordSettlement(groupId: string) {
     onSuccess: invalidate,
   });
 }
+export function useDeleteSettlement() {
+  const invalidate = useInvalidateLedger();
+  return useMutation({
+    // Undo: the database lets either the payer or the payee remove a payment.
+    mutationFn: async (settlementId: string) => {
+      const { data, error } = await db()
+        .from('settlements')
+        .delete()
+        .eq('id', settlementId)
+        .select('id');
+      if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error('Only the people in a payment can remove it.');
+      }
+    },
+    onSuccess: invalidate,
+  });
+}

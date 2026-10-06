@@ -5,6 +5,7 @@ import { Controller, useForm } from 'react-hook-form';
 import { StyleSheet, View } from 'react-native';
 
 import { GroupGate } from '@/components/GroupGate';
+import { InviteLinkSection } from '@/components/InviteLinkSection';
 import { Row, RowGroup } from '@/components/Rows';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
@@ -99,6 +100,8 @@ function InviteMember({ view, userId }: { view: GroupView; userId: string }) {
         ) : null}
         <Button label="Send invite" onPress={submit} loading={invite.isPending} />
       </View>
+
+      <InviteLinkSection groupId={group.id} groupName={group.name} />
 
       {pending.data && pending.data.length > 0 ? (
         <Section title={`Waiting to accept · ${pending.data.length}`}>

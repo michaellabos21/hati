@@ -1,5 +1,6 @@
 import { parseLedger } from '@/features/ledger/schema';
 import { selectDashboard, selectGroup, selectMyDebts } from '@/features/ledger/selectors';
+import { isInviteToken } from '@/features/invites/links';
 import { createDemoClient } from '@/lib/demo/demoClient';
 import { DEMO_EMAIL, DEMO_PASSWORD } from '@/lib/demo/sampleData';
 
@@ -222,5 +223,71 @@ describe('demo mode: joining needs an accepted invite', () => {
     await client.from('group_invites').delete().eq('id', 'demo-invite-1');
     expect((await client.rpc('get_my_invites')).data).toEqual([]);
     expect((await loadLedger(client)).groups.map((g) => g.id)).not.toContain('demo-research');
+  });
+});
+
+describe('demo mode: editing, undoing and invite links', () => {
+  it('lets the recorder edit an expense, and nobody else', async () => {
+    const client = await signedIn();
+    const dinner = (await loadLedger(client)).expenses.find((e) => e.description === 'Dinner');
+    const args = {
+      p_expense_id: dinner?.id,
+      p_description: 'Dinner at Mang Inasal',
+      p_amount: '1000.00',
+      p_paid_by: ME,
+      p_split_method: 'exact',
+      p_splits: [
+        { user_id: ME, amount_owed: '400.00' },
+        { user_id: 'demo-juan', amount_owed: '600.00' },
+      ],
+    };
+    expect((await client.rpc('update_expense', args)).error).toBeNull();
+    const after = (await loadLedger(client)).expenses.find((e) => e.id === dinner?.id);
+    expect(after).toMatchObject({ description: 'Dinner at Mang Inasal', amount: 100000 });
+    expect(after?.splits).toHaveLength(2);
+
+    const bad = await client.rpc('update_expense', { ...args, p_amount: '999.00' });
+    expect(bad.error?.message).toMatch(/Splits total/);
+
+    const juan = await signedIn('juan@example.com');
+    const notMine = await juan.rpc('update_expense', args);
+    expect(notMine.error?.message).toMatch(/Only the person who added/);
+  });
+
+  it('lets a party undo a payment, and updates balances', async () => {
+    const client = await signedIn();
+    const before = selectGroup(await loadLedger(client), 'demo-boracay', ME)?.balances[ME] ?? 0;
+    const removed = await client
+      .from('settlements')
+      .delete()
+      .eq('id', 'demo-settlement-1')
+      .select('id');
+    expect(removed.data).toEqual([{ id: 'demo-settlement-1' }]);
+    const after = selectGroup(await loadLedger(client), 'demo-boracay', ME)?.balances[ME] ?? 0;
+    // Carlo's ₱1,000 payment to Michael no longer counts.
+    expect(after - before).toBe(100000);
+  });
+
+  it('creates an invite link that a signed-in outsider can use to join', async () => {
+    const client = await signedIn();
+    const created = await client
+      .from('group_invite_links')
+      .insert({ group_id: 'demo-boracay' })
+      .select('token, expires_at')
+      .single();
+    const token = (created.data as { token: string }).token;
+    expect(isInviteToken(token)).toBe(true);
+
+    const info = await client.rpc('get_invite_link', { p_token: token });
+    expect(info.data).toMatchObject([{ group_name: 'Boracay 2026', already_member: true }]);
+
+    const wrong = await client.rpc('join_group_with_link', {
+      p_token: '00000000-0000-4000-8000-999999999999',
+    });
+    expect(wrong.error?.message).toMatch(/no longer valid/);
+
+    await client.from('group_invite_links').delete().eq('group_id', 'demo-boracay');
+    const off = await client.rpc('get_invite_link', { p_token: token });
+    expect(off.data).toEqual([]);
   });
 });

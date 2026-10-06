@@ -35,5 +35,16 @@ export const profileFormSchema = z.object({
 });
 export type ProfileValues = z.infer<typeof profileFormSchema>;
 
+export const newPasswordSchema = z
+  .object({
+    password: signupSchema.shape.password,
+    confirm: z.string(),
+  })
+  .refine((values) => values.password === values.confirm, {
+    path: ['confirm'],
+    message: 'The two passwords do not match.',
+  });
+export type NewPasswordValues = z.infer<typeof newPasswordSchema>;
+
 export const emailSchema = z.object({ email });
 export type EmailValues = z.infer<typeof emailSchema>;

@@ -123,6 +123,15 @@ function ExpenseDetail({
         <FormError message={remove.isError ? toMessage(remove.error) : null} />
         {mine ? (
           <Button
+            label="Edit expense"
+            variant="secondary"
+            onPress={() =>
+              router.push({ pathname: '/expenses/[id]/edit', params: { id: expense.id } })
+            }
+          />
+        ) : null}
+        {mine ? (
+          <Button
             label="Delete expense"
             variant="danger"
             onPress={onDelete}

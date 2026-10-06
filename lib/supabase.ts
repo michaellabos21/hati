@@ -24,6 +24,15 @@ function readEnv(): { env: SupabaseEnv | null; error: string | null } {
   }
 }
 
+/**
+ * True when the page was opened from a password-reset email. Read before the client is
+ * created, because the client consumes and clears the link's tokens as it starts up.
+ */
+export const openedFromRecoveryLink =
+  Platform.OS === 'web' &&
+  typeof window !== 'undefined' &&
+  /[#&?]type=recovery(&|$)/.test(window.location.hash + window.location.search);
+
 const { env, error } = DEMO_MODE ? { env: null, error: null } : readEnv();
 
 /** Why the client could not be created, or null when it is configured. Shown at app start. */

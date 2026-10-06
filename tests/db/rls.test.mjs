@@ -386,14 +386,15 @@ describe('settlements', () => {
     await asUser(db, juan, () => denied(insertSettlement(boracay, juan, bea)));
   });
 
-  it('payer or payee can record a payment; nobody can change or delete it', async () => {
+  it('payer or payee can record a payment; nobody can change it or remove someone else’s', async () => {
     await asUser(db, michael, () => insertSettlement(boracay, juan, michael, 100));
-    for (const user of [michael, juan]) {
-      await asUser(db, user, async () => {
-        await affectsNothing(db.query('update public.settlements set amount = 1'));
-        await affectsNothing(db.query('delete from public.settlements'));
-      });
+    for (const user of [michael, juan, ana]) {
+      await asUser(db, user, () =>
+        affectsNothing(db.query('update public.settlements set amount = 1')),
+      );
     }
+    // Ana is in the group but not a party to these payments, so she cannot remove them.
+    await asUser(db, ana, () => affectsNothing(db.query('delete from public.settlements')));
     const { rows } = await db.query('select 1 from public.settlements where group_id = $1', [
       boracay,
     ]);

@@ -80,9 +80,10 @@ fresh clone.
 ```text
 app/                  Routes (Expo Router). Screens only, no business logic.
   (tabs)/             Home, Groups, Activity, Profile
-  auth/               welcome, login, signup
+  auth/               welcome, login, signup, forgot
+  join/[token].tsx    Where an invite link lands
   groups/             create, pick, [id]/ (detail, add-expense, add-member (invite), balances, settle, remind)
-  expenses/[id].tsx
+  expenses/[id]/      detail, edit
 components/           Shared UI (components/ui is the design system)
 constants/            Design tokens, app name and tagline
 features/
@@ -125,15 +126,18 @@ charged and nothing is locked: "Try Premium" only records interest. To see deman
 
 ## Known limits
 
-- People are invited by exact email and join only if they accept. There are no invite links
-  or notifications yet: the invite appears on the person's Home screen next time they open the
-  app. Someone can be invited again after declining.
+- People join by accepting an invite sent to their email, or by opening the group's invite
+  link. There are no notifications yet: an email invite appears on the person's Home screen
+  next time they open the app. Anyone holding an invite link can join until it expires (7
+  days) or a member turns it off.
 - A member who has never paid, recorded or settled anything can leave even if others assigned
   them a share; that share then shows against "Former member".
 - Someone who created a group and later left can still read that group's name and description
   (not its members or money).
-- Expenses cannot be edited, only deleted and re-added by whoever recorded them. Payments
-  cannot be edited or deleted.
+- Only whoever recorded an expense can edit or delete it. A payment can be removed by either
+  person in it, but not edited.
+- Password reset is handled on the website. The reset link has only been built, not tried
+  with a real email; and in the native app the link opens the website rather than the app.
 - Someone who has left a group shows as "Former member" on its old expenses.
 - The ledger loads everything in one go, which suits the beta's size; it will need paging
   beyond roughly a thousand expenses per user.

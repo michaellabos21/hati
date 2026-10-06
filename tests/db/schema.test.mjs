@@ -12,6 +12,7 @@ const TABLES = [
   'settlements',
   'group_invites',
   'premium_interest',
+  'group_invite_links',
 ];
 
 let db;

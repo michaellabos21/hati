@@ -12,6 +12,14 @@ const RULES: { test: (message: string, code: string) => boolean; text: string | 
   },
   { test: (m) => /invalid login credentials/i.test(m), text: 'Wrong email or password.' },
   {
+    test: (m) => /should be different from the old password/i.test(m),
+    text: 'Choose a password you have not used before.',
+  },
+  {
+    test: (m) => /auth session missing|session.*expired|link is invalid or has expired/i.test(m),
+    text: 'That reset link has expired. Ask for a new one.',
+  },
+  {
     test: (m) => /already registered|already been registered/i.test(m),
     text: 'That email already has an account. Log in instead.',
   },

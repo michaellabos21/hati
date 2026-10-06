@@ -91,6 +91,12 @@ export default function LoginScreen() {
         <FormError message={error} />
         <Button label="Log in" onPress={submit} loading={formState.isSubmitting} />
         <Button
+          label="Forgot password?"
+          variant="ghost"
+          compact
+          onPress={() => router.push('/auth/forgot')}
+        />
+        <Button
           label="New here? Create an account"
           variant="ghost"
           onPress={() => router.replace('/auth/signup')}

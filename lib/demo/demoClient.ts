@@ -36,8 +36,11 @@ export function createDemoClient(): SupabaseClient {
   const listeners = new Set<AuthListener>();
   let session: DemoSession | null = null;
   const premiumInterest = new Set<string>();
+  let inviteLinks: DemoRow[] = [];
   let counter = 1;
   const newId = (kind: string) => `demo-${kind}-new-${counter++}`;
+  // Shaped like the uuid tokens the real database issues.
+  const demoToken = () => `00000000-0000-4000-8000-${String(counter++).padStart(12, '0')}`;
 
   const me = () => session?.user.id ?? '';
   const isMember = (groupId: unknown, userId: unknown) =>
@@ -95,7 +98,7 @@ export function createDemoClient(): SupabaseClient {
     listeners.forEach((listener) => listener(event, session));
   };
 
-  function select(table: string): Result {
+  function select(table: string, filters: [string, unknown][]): Result {
     const mine = myGroupIds();
     switch (table) {
       case 'groups':
@@ -124,6 +127,13 @@ export function createDemoClient(): SupabaseClient {
         return ok(tables.settlements.filter((s) => mine.has(s.group_id)).sort(newestFirst));
       case 'premium_interest':
         return ok(premiumInterest.has(me()) ? [{ user_id: me() }] : []);
+      case 'group_invite_links':
+        return ok(
+          inviteLinks.filter(
+            (link) =>
+              mine.has(link.group_id) && filters.every(([key, value]) => link[key] === value),
+          ),
+        );
       default:
         return fail(`Demo mode does not support reading ${table}.`);
     }
@@ -151,6 +161,25 @@ export function createDemoClient(): SupabaseClient {
         }
         premiumInterest.add(me());
         return ok();
+      case 'group_invite_links': {
+        if (!isMember(row.group_id, me()))
+          return fail('new row violates row-level security policy');
+        if (inviteLinks.some((link) => link.group_id === row.group_id)) {
+          return fail(
+            'duplicate key value violates unique constraint "group_invite_links_group_id_key"',
+            '23505',
+          );
+        }
+        const link = {
+          token: demoToken(),
+          created_by: me(),
+          created_at: new Date().toISOString(),
+          expires_at: new Date(Date.now() + 7 * 86_400_000).toISOString(),
+          ...row,
+        };
+        inviteLinks.push(link);
+        return ok([link]);
+      }
       case 'group_members':
         // Membership only comes from creating a group or accepting an invite.
         return fail('new row violates row-level security policy');
@@ -218,6 +247,19 @@ export function createDemoClient(): SupabaseClient {
         tables.group_members = tables.group_members.filter((m) => !leaving.includes(m));
         return ok();
       }
+      case 'group_invite_links':
+        inviteLinks = inviteLinks.filter(
+          (link) => !(matches(link) && isMember(link.group_id, me())),
+        );
+        return ok();
+      case 'settlements': {
+        // Undo: either party to the payment may remove it.
+        const gone = tables.settlements.filter(
+          (s) => matches(s) && (s.from_user === me() || s.to_user === me()),
+        );
+        tables.settlements = tables.settlements.filter((s) => !gone.includes(s));
+        return ok(gone.map((s) => ({ id: s.id })));
+      }
       case 'group_invites':
         // The invited person declines, or a member withdraws.
         tables.group_invites = tables.group_invites.filter(
@@ -255,7 +297,7 @@ export function createDemoClient(): SupabaseClient {
             ? update(table, payload, filters)
             : action === 'delete'
               ? remove(table, filters)
-              : select(table);
+              : select(table, filters);
       if (single && Array.isArray(result.data)) {
         return result.data.length > 0 ? ok(result.data[0]) : fail('No rows found', 'PGRST116');
       }
@@ -346,6 +388,79 @@ export function createDemoClient(): SupabaseClient {
             .filter((u) => u.email === email)
             .map((u) => ({ id: u.id, display_name: u.display_name })),
         );
+      }
+      if (name === 'get_invite_link') {
+        const link = inviteLinks.find(
+          (candidate) =>
+            candidate.token === args.p_token && new Date(str(candidate.expires_at)) > new Date(),
+        );
+        if (!link) return ok([]);
+        return ok([
+          {
+            group_id: link.group_id,
+            group_name: str(tables.groups.find((g) => g.id === link.group_id)?.name ?? ''),
+            invited_by_name: memberById(link.created_by)?.display_name ?? null,
+            member_count: tables.group_members.filter((m) => m.group_id === link.group_id).length,
+            already_member: isMember(link.group_id, me()),
+          },
+        ]);
+      }
+      if (name === 'join_group_with_link') {
+        const link = inviteLinks.find(
+          (candidate) =>
+            candidate.token === args.p_token && new Date(str(candidate.expires_at)) > new Date(),
+        );
+        if (!link) {
+          return fail('This invite link is no longer valid. Ask for a new one.', '23514');
+        }
+        if (!isMember(link.group_id, me())) {
+          tables.group_members.push({ group_id: link.group_id, user_id: me() });
+        }
+        tables.group_invites = tables.group_invites.filter(
+          (invite) => !(invite.group_id === link.group_id && invite.invited_user === me()),
+        );
+        return ok(link.group_id);
+      }
+      if (name === 'update_expense') {
+        const expense = tables.expenses.find(
+          (candidate) => candidate.id === args.p_expense_id && candidate.created_by === me(),
+        );
+        if (!expense || !isMember(expense.group_id, me())) {
+          return fail('Only the person who added this expense can edit it.', '23514');
+        }
+        const splits = args.p_splits as { user_id: string; amount_owed: string }[];
+        if (
+          !isMember(expense.group_id, args.p_paid_by) ||
+          splits.some((split) => !isMember(expense.group_id, split.user_id))
+        ) {
+          return fail('new row violates row-level security policy');
+        }
+        const cents = (value: unknown) => Math.round(num(value) * 100);
+        const total = splits.reduce((sum, split) => sum + cents(split.amount_owed), 0);
+        if (splits.length === 0) {
+          return fail('An expense needs at least one person to split with.', '23514');
+        }
+        if (total !== cents(args.p_amount)) {
+          return fail(
+            `Splits total ${total / 100} but the expense is ${num(args.p_amount)}.`,
+            '23514',
+          );
+        }
+        Object.assign(expense, {
+          description: str(args.p_description),
+          amount: num(args.p_amount),
+          paid_by: args.p_paid_by,
+          split_method: args.p_split_method,
+        });
+        tables.expense_splits = tables.expense_splits.filter((s) => s.expense_id !== expense.id);
+        for (const split of splits) {
+          tables.expense_splits.push({
+            expense_id: expense.id,
+            user_id: split.user_id,
+            amount_owed: num(split.amount_owed),
+          });
+        }
+        return ok();
       }
       if (name === 'create_expense') {
         const splits = args.p_splits as { user_id: string; amount_owed: string }[];
@@ -444,6 +559,15 @@ export function createDemoClient(): SupabaseClient {
     async signOut() {
       await setSession(null, 'SIGNED_OUT');
       return { error: null };
+    },
+    // Demo mode has no email and no real passwords; these succeed so the screens can be seen.
+    async resetPasswordForEmail() {
+      await later(null);
+      return { data: {}, error: null };
+    },
+    async updateUser() {
+      await later(null);
+      return { data: { user: session?.user ?? null }, error: null };
     },
     startAutoRefresh() {},
     stopAutoRefresh() {},

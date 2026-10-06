@@ -1,9 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { Tabs } from 'expo-router/js-tabs';
-import type { ComponentProps } from 'react';
+import { useEffect, type ComponentProps } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { colors, fonts } from '@/constants/theme';
+import { takeRememberedInviteToken } from '@/features/invites/links';
 
 type IconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -19,6 +21,19 @@ const tabIcon = (outline: IconName, filled: IconName) => {
 };
 
 export default function TabsLayout() {
+  const router = useRouter();
+
+  // Someone who opened an invite link before signing up lands back on that invite.
+  useEffect(() => {
+    let active = true;
+    takeRememberedInviteToken().then((token) => {
+      if (active && token) router.push({ pathname: '/join/[token]', params: { token } });
+    });
+    return () => {
+      active = false;
+    };
+  }, [router]);
+
   return (
     <Tabs
       screenOptions={{

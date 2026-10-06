@@ -10,13 +10,17 @@ import { Button } from '@/components/ui/Button';
 import { Card, Perforation } from '@/components/ui/Card';
 import { FadeIn } from '@/components/ui/FadeIn';
 import { Section } from '@/components/ui/Section';
-import { EmptyState } from '@/components/ui/States';
+import { EmptyState, FormError } from '@/components/ui/States';
 import { Text } from '@/components/ui/Text';
 import { colors, spacing } from '@/constants/theme';
 import type { Transfer } from '@/features/balances/calculations';
 import { FORMER_MEMBER } from '@/features/ledger/schema';
 import { findMember, nameOf, type GroupView } from '@/features/ledger/selectors';
+import { useDeleteSettlement } from '@/features/settlements/api';
+import { confirm } from '@/lib/confirm';
 import { formatPeso } from '@/lib/currency';
+import { toMessage } from '@/lib/errors';
+import type { Settlement } from '@/types/domain';
 
 export default function BalancesScreen() {
   const router = useRouter();
@@ -130,6 +134,19 @@ function TransferCard({
 
 function Balances({ view, userId }: { view: GroupView; userId: string }) {
   const { group, balances, transfers, settlements, expenses } = view;
+  const remove = useDeleteSettlement();
+
+  const undo = async (settlement: Settlement) => {
+    const from = nameOf(group, settlement.from, userId);
+    const to = nameOf(group, settlement.to, userId).replace(/^You$/, 'you');
+    const yes = await confirm({
+      title: 'Remove this payment?',
+      message: `“${from} paid ${to} ${formatPeso(settlement.amount)}” will be removed and everyone’s balances will go back to what they were before it.`,
+      confirmLabel: 'Remove payment',
+      destructive: true,
+    });
+    if (yes) remove.mutate(settlement.id);
+  };
   // My own payments first, since those are the ones I can act on.
   const ordered = [...transfers].sort((a, b) => {
     const mine = (t: Transfer) => (t.from === userId || t.to === userId ? 0 : 1);
@@ -213,10 +230,21 @@ function Balances({ view, userId }: { view: GroupView; userId: string }) {
                   settlement,
                 }}
                 viewerId={userId}
+                onPress={
+                  settlement.from === userId || settlement.to === userId
+                    ? () => undo(settlement)
+                    : undefined
+                }
               />
             ))}
           </RowGroup>
         )}
+        {settlements.some((s) => s.from === userId || s.to === userId) ? (
+          <Text variant="small" color={colors.inkSoft}>
+            Recorded one by mistake? Tap a payment you were part of to remove it.
+          </Text>
+        ) : null}
+        <FormError message={remove.isError ? toMessage(remove.error) : null} />
       </Section>
     </>
   );

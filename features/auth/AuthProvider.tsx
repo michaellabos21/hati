@@ -2,19 +2,27 @@ import type { Session } from '@supabase/supabase-js';
 import { useQueryClient } from '@tanstack/react-query';
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 
-import { db } from '@/lib/supabase';
+import { db, openedFromRecoveryLink } from '@/lib/supabase';
 
 type AuthState = {
   session: Session | null;
   /** True until the stored session has been read on app start. */
   loading: boolean;
+  /** True after arriving from a password-reset email, until a new password is chosen. */
+  recovering: boolean;
 };
 
-const AuthContext = createContext<AuthState | null>(null);
+type AuthContextValue = AuthState & { finishRecovery: () => void };
+
+const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
-  const [state, setState] = useState<AuthState>({ session: null, loading: true });
+  const [state, setState] = useState<AuthState>({
+    session: null,
+    loading: true,
+    recovering: openedFromRecoveryLink,
+  });
 
   useEffect(() => {
     let active = true;
@@ -22,14 +30,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     db()
       .auth.getSession()
       .then(({ data }) => {
-        if (active) setState({ session: data.session, loading: false });
+        if (active) setState((current) => ({ ...current, session: data.session, loading: false }));
       })
       .catch(() => {
-        if (active) setState({ session: null, loading: false });
+        if (active) setState((current) => ({ ...current, session: null, loading: false }));
       });
 
     const { data } = db().auth.onAuthStateChange((event, session) => {
-      setState({ session, loading: false });
+      setState((current) => ({
+        session,
+        loading: false,
+        recovering:
+          event === 'PASSWORD_RECOVERY'
+            ? true
+            : event === 'SIGNED_OUT'
+              ? false
+              : current.recovering,
+      }));
       // Never show one account's cached data to the next account on the same phone.
       if (event === 'SIGNED_OUT') queryClient.clear();
     });
@@ -40,11 +57,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [queryClient]);
 
-  const value = useMemo(() => state, [state]);
+  const value = useMemo(
+    () => ({
+      ...state,
+      finishRecovery: () => setState((current) => ({ ...current, recovering: false })),
+    }),
+    [state],
+  );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
-export function useAuth(): AuthState {
+export function useAuth(): AuthContextValue {
   const context = useContext(AuthContext);
   if (!context) throw new Error('useAuth must be used inside AuthProvider.');
   return context;

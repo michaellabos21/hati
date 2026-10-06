@@ -15,6 +15,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import { AppState, Platform } from 'react-native';
 
+import { NewPasswordScreen } from '@/components/NewPasswordScreen';
 import { Screen } from '@/components/ui/Screen';
 import { EmptyState, LoadingState } from '@/components/ui/States';
 import { colors, fonts } from '@/constants/theme';
@@ -75,9 +76,12 @@ export default function RootLayout() {
 }
 
 function RootNavigator() {
-  const { session, loading } = useAuth();
+  const { session, loading, recovering } = useAuth();
 
   if (loading) return <LoadingState label="Opening HATI…" />;
+
+  // Arrived from a password-reset email: choose the new password before anything else.
+  if (recovering) return <NewPasswordScreen />;
 
   return (
     <Stack
@@ -99,13 +103,17 @@ function RootNavigator() {
         <Stack.Screen name="groups/[id]/balances" options={{ title: 'Balances' }} />
         <Stack.Screen name="groups/[id]/settle" options={{ title: 'Record a payment' }} />
         <Stack.Screen name="groups/[id]/remind" options={{ title: 'Send a reminder' }} />
-        <Stack.Screen name="expenses/[id]" options={{ title: 'Expense' }} />
+        <Stack.Screen name="expenses/[id]/index" options={{ title: 'Expense' }} />
+        <Stack.Screen name="expenses/[id]/edit" options={{ title: 'Edit expense' }} />
         <Stack.Screen name="premium" options={{ title: '' }} />
       </Stack.Protected>
+      {/* Invite links work signed in or out, so this screen sits outside both guards. */}
+      <Stack.Screen name="join/[token]" options={{ headerShown: false }} />
       <Stack.Protected guard={session === null}>
         <Stack.Screen name="auth/welcome" options={{ headerShown: false }} />
         <Stack.Screen name="auth/login" options={{ title: '' }} />
         <Stack.Screen name="auth/signup" options={{ title: '' }} />
+        <Stack.Screen name="auth/forgot" options={{ title: '' }} />
       </Stack.Protected>
     </Stack>
   );

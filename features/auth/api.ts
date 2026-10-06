@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Platform } from 'react-native';
 
 import type { LoginValues, ProfileValues, SignupValues } from '@/features/auth/schemas';
 import { z } from 'zod';
@@ -25,6 +26,25 @@ export async function signUp({ email, password, displayName }: SignupValues) {
   });
   if (error) throw error;
   return { needsEmailConfirmation: data.session === null };
+}
+
+/**
+ * Emails a password-reset link. Supabase answers the same way whether or not the address has
+ * an account, so this cannot be used to find out who is registered.
+ */
+export async function requestPasswordReset(email: string) {
+  // On web, send them back to wherever the app is running. In the native app, leave it to the
+  // project's Site URL (the public website), which is where the link can be handled.
+  const redirectTo =
+    Platform.OS === 'web' && typeof window !== 'undefined' ? window.location.origin : undefined;
+  const { error } = await db().auth.resetPasswordForEmail(email, { redirectTo });
+  if (error) throw error;
+}
+
+/** Sets a new password for the signed-in user (after following a reset link). */
+export async function setNewPassword(password: string) {
+  const { error } = await db().auth.updateUser({ password });
+  if (error) throw error;
 }
 
 export async function logOut() {

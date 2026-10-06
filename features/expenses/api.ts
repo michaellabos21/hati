@@ -26,10 +26,33 @@ export function useCreateExpense(groupId: string) {
         p_amount: centavosToNumeric(expense.amount),
         p_paid_by: expense.paidBy,
         p_split_method: expense.splitMethod,
-        p_splits: expense.splits.map((split) => ({
-          user_id: split.userId,
-          amount_owed: centavosToNumeric(split.amount),
-        })),
+        p_splits: toSplitRows(expense.splits),
+      });
+      if (error) throw error;
+    },
+    onSuccess: invalidate,
+  });
+}
+
+const toSplitRows = (splits: Split[]) =>
+  splits.map((split) => ({
+    user_id: split.userId,
+    amount_owed: centavosToNumeric(split.amount),
+  }));
+
+export function useUpdateExpense(expenseId: string) {
+  const invalidate = useInvalidateLedger();
+  return useMutation({
+    // Rewrites the expense and its splits together, under the same rules as creating one.
+    // Only the person who recorded it is allowed to.
+    mutationFn: async (expense: NewExpense) => {
+      const { error } = await db().rpc('update_expense', {
+        p_expense_id: expenseId,
+        p_description: expense.description.trim(),
+        p_amount: centavosToNumeric(expense.amount),
+        p_paid_by: expense.paidBy,
+        p_split_method: expense.splitMethod,
+        p_splits: toSplitRows(expense.splits),
       });
       if (error) throw error;
     },
