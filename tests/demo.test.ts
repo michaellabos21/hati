@@ -177,3 +177,50 @@ describe('demo mode keeps wallet numbers private', () => {
     expect(direct.error).not.toBeNull();
   });
 });
+
+describe('demo mode: joining needs an accepted invite', () => {
+  it('shows Michael a pending invite and lets him accept it', async () => {
+    const client = await signedIn();
+    const invites = await client.rpc('get_my_invites');
+    expect(invites.data).toMatchObject([
+      { group_name: 'Research Project', invited_by_name: 'Ana', member_count: 2 },
+    ]);
+    expect((await loadLedger(client)).groups.map((g) => g.id)).not.toContain('demo-research');
+
+    const accepted = await client.rpc('accept_group_invite', { p_invite_id: 'demo-invite-1' });
+    expect(accepted.data).toBe('demo-research');
+    expect((await loadLedger(client)).groups.map((g) => g.id)).toContain('demo-research');
+    expect((await client.rpc('get_my_invites')).data).toEqual([]);
+  });
+
+  it('does not let a member add someone directly', async () => {
+    const client = await signedIn();
+    const direct = await client
+      .from('group_members')
+      .insert({ group_id: 'demo-boracay', user_id: 'demo-dani' });
+    expect(direct.error?.message).toMatch(/row-level security/);
+  });
+
+  it('sends, lists and withdraws invites, and refuses duplicates', async () => {
+    const client = await signedIn();
+    const invite = { group_id: 'demo-boracay', invited_user: 'demo-dani' };
+    expect((await client.from('group_invites').insert(invite)).error).toBeNull();
+    expect((await client.from('group_invites').insert(invite)).error?.code).toBe('23505');
+
+    const pending = await client.rpc('get_group_invites', { p_group_id: 'demo-boracay' });
+    expect(pending.data).toMatchObject([{ invited_user: 'demo-dani', display_name: 'Dani' }]);
+
+    const id = (pending.data as { id: string }[])[0].id;
+    await client.from('group_invites').delete().eq('id', id);
+    expect((await client.rpc('get_group_invites', { p_group_id: 'demo-boracay' })).data).toEqual(
+      [],
+    );
+  });
+
+  it('declining removes the invite without joining', async () => {
+    const client = await signedIn();
+    await client.from('group_invites').delete().eq('id', 'demo-invite-1');
+    expect((await client.rpc('get_my_invites')).data).toEqual([]);
+    expect((await loadLedger(client)).groups.map((g) => g.id)).not.toContain('demo-research');
+  });
+});

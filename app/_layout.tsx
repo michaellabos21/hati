@@ -95,7 +95,7 @@ function RootNavigator() {
         <Stack.Screen name="groups/pick" options={{ title: 'Add expense' }} />
         <Stack.Screen name="groups/[id]/index" options={{ title: '' }} />
         <Stack.Screen name="groups/[id]/add-expense" options={{ title: 'Add expense' }} />
-        <Stack.Screen name="groups/[id]/add-member" options={{ title: 'Add member' }} />
+        <Stack.Screen name="groups/[id]/add-member" options={{ title: 'Invite' }} />
         <Stack.Screen name="groups/[id]/balances" options={{ title: 'Balances' }} />
         <Stack.Screen name="groups/[id]/settle" options={{ title: 'Record a payment' }} />
         <Stack.Screen name="groups/[id]/remind" options={{ title: 'Send a reminder' }} />

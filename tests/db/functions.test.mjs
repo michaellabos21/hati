@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { before, describe, it } from 'node:test';
 
-import { asUser, createDatabase, createUser, emailFor } from './helpers.mjs';
+import { asUser, createDatabase, createUser, emailFor, joinGroup } from './helpers.mjs';
 
 let db;
 let michael, juan, bea;
@@ -27,12 +27,9 @@ before(async () => {
     const { rows } = await db.query(
       `insert into public.groups (name) values ('Barkada') returning id`,
     );
-    await db.query('insert into public.group_members (group_id, user_id) values ($1, $2)', [
-      rows[0].id,
-      juan,
-    ]);
     return rows[0].id;
   });
+  await joinGroup(db, group, michael, juan);
 });
 
 describe('profile on sign-up', () => {

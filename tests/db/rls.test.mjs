@@ -3,7 +3,13 @@
 import assert from 'node:assert/strict';
 import { before, describe, it } from 'node:test';
 
-import { asUser, createDatabase, createUser, insertExpenseWithSplits } from './helpers.mjs';
+import {
+  asUser,
+  createDatabase,
+  createUser,
+  insertExpenseWithSplits,
+  joinGroup,
+} from './helpers.mjs';
 
 let db;
 // Michael, Juan and Ana share "Boracay". Bea has her own private group. Carlo is in nothing.
@@ -60,12 +66,10 @@ before(async () => {
       `insert into public.groups (name) values ('Boracay 2026') returning id, created_by`,
     );
     assert.equal(rows[0].created_by, michael, 'created_by defaults to the signed-in user');
-    await db.query(
-      'insert into public.group_members (group_id, user_id) values ($1, $2), ($1, $3)',
-      [rows[0].id, juan, ana],
-    );
     return rows[0].id;
   });
+  await joinGroup(db, boracay, michael, juan);
+  await joinGroup(db, boracay, michael, ana);
   dinner = await asUser(db, michael, () =>
     insertExpenseWithSplits(db, { group_id: boracay, amount: 2400, paid_by: michael }, [
       [michael, 800],
@@ -253,12 +257,9 @@ describe('membership', () => {
       const { rows } = await db.query(
         `insert into public.groups (name) values ('Leave test') returning id`,
       );
-      await db.query('insert into public.group_members (group_id, user_id) values ($1, $2)', [
-        rows[0].id,
-        juan,
-      ]);
       return rows[0].id;
     });
+    await joinGroup(db, temp, michael, juan);
     await asUser(db, juan, async () => {
       await affectsNothing(
         db.query('delete from public.group_members where group_id = $1 and user_id = $2', [

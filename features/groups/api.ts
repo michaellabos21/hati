@@ -27,35 +27,6 @@ export function useCreateGroup() {
   });
 }
 
-export class UserNotFoundError extends Error {
-  constructor() {
-    super('No HATI account uses that email yet. Ask them to sign up first.');
-    this.name = 'UserNotFoundError';
-  }
-}
-
-export function useAddMember(groupId: string) {
-  const invalidate = useInvalidateLedger();
-  return useMutation({
-    /** Adds the account with exactly this email. Returns their display name. */
-    mutationFn: async (email: string): Promise<string> => {
-      const found = await db().rpc('find_user_by_email', { search_email: email });
-      if (found.error) throw found.error;
-      const match = z
-        .array(z.object({ id: z.string(), display_name: z.string() }))
-        .parse(found.data ?? [])[0];
-      if (!match) throw new UserNotFoundError();
-
-      const { error } = await db()
-        .from('group_members')
-        .insert({ group_id: groupId, user_id: match.id });
-      if (error) throw error;
-      return match.display_name;
-    },
-    onSuccess: invalidate,
-  });
-}
-
 export function useLeaveGroup(groupId: string, userId: string) {
   const invalidate = useInvalidateLedger();
   return useMutation({

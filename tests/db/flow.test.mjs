@@ -53,14 +53,27 @@ async function balancesFor(user, group) {
 const createGroup = async (name) =>
   (await db.query('insert into public.groups (name) values ($1) returning id', [name])).rows[0].id;
 
-const addMemberByEmail = async (group, email) => {
+/** As the signed-in member: find someone by email and invite them. Returns who and which invite. */
+const inviteByEmail = async (group, email) => {
   const found = await db.query('select id from public.find_user_by_email($1)', [email]);
   assert.equal(found.rows.length, 1, `no user for ${email}`);
-  await db.query('insert into public.group_members (group_id, user_id) values ($1, $2)', [
-    group,
-    found.rows[0].id,
-  ]);
+  const invite = await db.query(
+    'insert into public.group_invites (group_id, invited_user) values ($1, $2) returning id',
+    [group, found.rows[0].id],
+  );
+  return { userId: found.rows[0].id, inviteId: invite.rows[0].id };
 };
+
+/** As the invited person: see the invite on their list and accept it. */
+const acceptInvite = ({ userId, inviteId }) =>
+  asUser(db, userId, async () => {
+    const mine = await db.query('select id, group_name from public.get_my_invites()');
+    assert.ok(
+      mine.rows.some((row) => row.id === inviteId),
+      'the invite should be on their list',
+    );
+    await db.query('select public.accept_group_invite($1)', [inviteId]);
+  });
 
 /** Equal split in centavos with the leftover going to the first people, as the app does. */
 const equalShares = (amount, people) => {
@@ -94,12 +107,16 @@ describe('definition of done', () => {
     const michael = await createUser(db, 'Michael'); // 1. sign up
     const juan = await createUser(db, 'Juan');
 
-    const group = await asUser(db, michael, async () => {
-      const id = await createGroup('Barkada'); // 2. create a group
-      await addMemberByEmail(id, emailFor('Juan')); // 3. add another user
-      await addEqualExpense(id, 'Dinner', 2400, michael, [michael, juan]); // 4-6.
-      return id;
-    });
+    const group = await asUser(db, michael, () => createGroup('Barkada')); // 2. create a group
+
+    // 3. Add another user: Michael invites Juan by email, and Juan accepts.
+    const invite = await asUser(db, michael, () => inviteByEmail(group, emailFor('Juan')));
+    await acceptInvite(invite);
+
+    // 4-6. A ₱2,400 expense, paid by Michael, split equally.
+    await asUser(db, michael, () =>
+      addEqualExpense(group, 'Dinner', 2400, michael, [michael, juan]),
+    );
 
     // 7. Both members see exactly who owes whom.
     for (const viewer of [michael, juan]) {
@@ -137,11 +154,11 @@ describe('Boracay 2026 seed scenario', () => {
     for (const name of names) ids.push(await createUser(db, name));
     const [miguel, jose, ana, bea, carlo] = ids;
 
-    const group = await asUser(db, miguel, async () => {
-      const id = await createGroup('Boracay 2026');
-      for (const name of names.slice(1)) await addMemberByEmail(id, emailFor(name));
-      return id;
-    });
+    const group = await asUser(db, miguel, () => createGroup('Boracay 2026'));
+    for (const name of names.slice(1)) {
+      const invite = await asUser(db, miguel, () => inviteByEmail(group, emailFor(name)));
+      await acceptInvite(invite);
+    }
 
     await asUser(db, miguel, () => addEqualExpense(group, 'Dinner', 2400, miguel, ids));
     await asUser(db, miguel, () => addEqualExpense(group, 'Hotel', 5000, miguel, ids));

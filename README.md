@@ -28,8 +28,9 @@ npm run web             # or: npm start, then press i / a
 ```
 
 Tap **Explore with sample data**. You are signed in as Michael in the "Boracay 2026" group from
-the brief (five people, four expenses, several payers). Other demo accounts (`juan@`, `ana@`,
-`bea@`, `carlo@`, `dani@example.com`) all use the password `password`.
+the brief (five people, four expenses, several payers). Michael also has an invite waiting from Ana. Other
+demo accounts (`juan@`, `ana@`, `bea@`, `carlo@`, `dani@example.com`) all use the password
+`password`.
 
 Demo mode keeps everything in memory: nothing is saved and reloading resets the data. Every data
 screen shows a "Demo mode" banner. It is only active when `EXPO_PUBLIC_DEMO_MODE=true`.
@@ -80,7 +81,7 @@ fresh clone.
 app/                  Routes (Expo Router). Screens only, no business logic.
   (tabs)/             Home, Groups, Activity, Profile
   auth/               welcome, login, signup
-  groups/             create, pick, [id]/ (detail, add-expense, add-member, balances, settle, remind)
+  groups/             create, pick, [id]/ (detail, add-expense, add-member (invite), balances, settle, remind)
   expenses/[id].tsx
 components/           Shared UI (components/ui is the design system)
 constants/            Design tokens, app name and tagline
@@ -88,7 +89,7 @@ features/
   balances/           calculateGroupBalances, simplifyDebts (pure)
   expenses/           splitEqually, validateExpense (pure) and mutations
   ledger/             One query for everything the user can see, plus pure selectors
-  auth/ groups/ settlements/
+  auth/ groups/ invites/ settlements/
 lib/                  Supabase client, currency, dates, errors, demo mode
 supabase/migrations/  Schema, RLS policies, server functions
 scripts/              check-supabase, seed
@@ -107,7 +108,8 @@ Import with the `@/` alias, e.g. `import { colors } from '@/constants/theme'`.
 - **The server is authoritative.** Row Level Security scopes everything to group membership.
   An expense and its splits are written by one database function and must add up exactly. Only
   the person who recorded an expense can delete it. Only the payer or payee can record a
-  payment. A member cannot leave while they owe or are owed money.
+  payment. Nobody can be added to a group, or given a share of an expense, without accepting
+  an invite first.
 - **Wallet numbers are private.** GCash and Maya numbers are readable only by their owner; a
   reminder includes the sender's own number.
 
@@ -117,8 +119,11 @@ One deliberate difference from the brief: section 8 writes the settlement signs 
 
 ## Known limits
 
-- Members are added by exact email and do not have to accept. They can leave if they are
-  settled up. Invite links are on the brief's V2 list.
+- People are invited by exact email and join only if they accept. There are no invite links
+  or notifications yet: the invite appears on the person's Home screen next time they open the
+  app. Someone can be invited again after declining.
+- A member who has never paid, recorded or settled anything can leave even if others assigned
+  them a share; that share then shows against "Former member".
 - Someone who created a group and later left can still read that group's name and description
   (not its members or money).
 - Expenses cannot be edited, only deleted and re-added by whoever recorded them. Payments

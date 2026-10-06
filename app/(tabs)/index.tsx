@@ -3,6 +3,7 @@ import { useRouter } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
 
 import { BalanceTicket } from '@/components/BalanceTicket';
+import { InviteCards } from '@/components/InviteCards';
 import { LedgerScreen } from '@/components/LedgerScreen';
 import { ActivityRow, GroupRow, Row, RowGroup } from '@/components/Rows';
 import { Amount } from '@/components/ui/Amount';
@@ -63,12 +64,14 @@ function Dashboard({ ledger }: { ledger: Ledger }) {
         </Text>
       </FadeIn>
 
+      <InviteCards />
+
       {groups.length === 0 ? (
         <FadeIn order={1}>
           <EmptyState
             emoji="🧾"
             title="Start your first hatian"
-            body="Make a group for your barkada, trip or apartment, then add what everyone spent."
+            body="Make a group for your barkada, trip or apartment, then invite them and add what everyone spent."
             action={<Button label="Create a group" onPress={() => router.push('/groups/create')} />}
           />
         </FadeIn>

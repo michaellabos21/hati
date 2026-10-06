@@ -14,36 +14,45 @@ import { FormError } from '@/components/ui/States';
 import { Text } from '@/components/ui/Text';
 import { colors, radii, spacing } from '@/constants/theme';
 import { emailSchema, type EmailValues } from '@/features/auth/schemas';
-import { useAddMember } from '@/features/groups/api';
+import { useGroupInvites, useInviteMember, useWithdrawInvite } from '@/features/invites/api';
 import type { GroupView } from '@/features/ledger/selectors';
+import { relativeTime } from '@/lib/dates';
 import { toMessage } from '@/lib/errors';
 
-export default function AddMemberScreen() {
+export default function InviteMemberScreen() {
   const router = useRouter();
   return (
     <GroupGate
       footer={() => <Button label="Done" variant="secondary" onPress={() => router.back()} />}>
-      {(view, userId) => <AddMember view={view} userId={userId} />}
+      {(view, userId) => <InviteMember view={view} userId={userId} />}
     </GroupGate>
   );
 }
 
-function AddMember({ view, userId }: { view: GroupView; userId: string }) {
+function InviteMember({ view, userId }: { view: GroupView; userId: string }) {
   const { group } = view;
-  const add = useAddMember(group.id);
-  const [added, setAdded] = useState<string | null>(null);
+  const invite = useInviteMember(
+    group.id,
+    group.members.map((member) => member.id),
+  );
+  const withdraw = useWithdrawInvite(group.id);
+  const pending = useGroupInvites(group.id);
+  const [sentTo, setSentTo] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
   const { control, handleSubmit, reset } = useForm<EmailValues>({
     resolver: zodResolver(emailSchema),
     defaultValues: { email: '' },
   });
 
   const submit = handleSubmit(({ email }) => {
-    setAdded(null);
-    add.mutate(email, {
+    setSentTo(null);
+    setFormError(null);
+    invite.mutate(email, {
       onSuccess: (name) => {
-        setAdded(name);
+        setSentTo(name);
         reset({ email: '' });
       },
+      onError: (caught) => setFormError(toMessage(caught)),
     });
   });
 
@@ -51,10 +60,11 @@ function AddMember({ view, userId }: { view: GroupView; userId: string }) {
     <>
       <View style={styles.heading}>
         <Text variant="title" accessibilityRole="header">
-          Add to {group.name}
+          Invite to {group.name}
         </Text>
         <Text color={colors.inkSoft}>
-          Enter the email they signed up to HATI with. They need an account first.
+          Enter the email they use for HATI. They get an invite on their Home screen and join only
+          if they accept.
         </Text>
       </View>
 
@@ -74,21 +84,53 @@ function AddMember({ view, userId }: { view: GroupView; userId: string }) {
               autoCapitalize="none"
               autoComplete="off"
               autoCorrect={false}
-              returnKeyType="done"
+              returnKeyType="send"
               onSubmitEditing={submit}
             />
           )}
         />
-        <FormError message={add.isError ? toMessage(add.error) : null} />
-        {added ? (
+        <FormError message={formError} />
+        {sentTo ? (
           <View style={styles.success} accessibilityLiveRegion="polite">
             <Text variant="smallBold" color={colors.owed}>
-              {added} is in! 🎉 Add someone else, or tap Done.
+              Invite sent to {sentTo} 🎉 They can be added to expenses once they accept.
             </Text>
           </View>
         ) : null}
-        <Button label="Add member" onPress={submit} loading={add.isPending} />
+        <Button label="Send invite" onPress={submit} loading={invite.isPending} />
       </View>
+
+      {pending.data && pending.data.length > 0 ? (
+        <Section title={`Waiting to accept · ${pending.data.length}`}>
+          <RowGroup>
+            {pending.data.map((item) => (
+              <Row
+                key={item.id}
+                leading={<Avatar id={item.userId} name={item.displayName} />}
+                title={item.displayName}
+                subtitle={`Invited ${relativeTime(item.createdAt).toLowerCase()}`}
+                trailing={
+                  <Button
+                    label="Withdraw"
+                    variant="ghost"
+                    compact
+                    disabled={withdraw.isPending}
+                    accessibilityHint={`Cancel the invite to ${item.displayName}`}
+                    onPress={() => withdraw.mutate(item.id)}
+                  />
+                }
+                accessibilityLabel={`${item.displayName}, invited, waiting to accept`}
+              />
+            ))}
+          </RowGroup>
+          <FormError message={withdraw.isError ? toMessage(withdraw.error) : null} />
+        </Section>
+      ) : null}
+      {pending.isError ? (
+        <Text variant="small" color={colors.inkSoft}>
+          Could not load pending invites. Pull down to try again.
+        </Text>
+      ) : null}
 
       <Section title={`In this group · ${group.members.length}`}>
         <RowGroup>

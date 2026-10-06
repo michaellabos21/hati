@@ -1,8 +1,8 @@
 // Demo mode's stand-in for the Supabase client: the same calls the app makes, answered from
 // memory with sample data. Nothing leaves the device and nothing is saved; reloading resets it.
 //
-// It mirrors the rules the real database enforces (membership scoping, splits that add up, no
-// leaving with a balance, payments only by a party) so the demo behaves like the real thing,
+// It mirrors the rules the real database enforces (membership scoping, joining only by accepting an invite,
+// splits that add up, no leaving with a balance, payments only by a party) so the demo behaves like the real thing,
 // but it is NOT a security boundary and is never used unless EXPO_PUBLIC_DEMO_MODE is "true".
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -74,6 +74,15 @@ export function createDemoClient(): SupabaseClient {
     return total;
   };
 
+  /** Has this person paid, recorded or settled anything in the group themselves? */
+  const hasOwnActivity = (groupId: unknown, userId: unknown) =>
+    tables.expenses.some(
+      (e) => e.group_id === groupId && (e.paid_by === userId || e.created_by === userId),
+    ) ||
+    tables.settlements.some(
+      (s) => s.group_id === groupId && (s.from_user === userId || s.to_user === userId),
+    );
+
   const setSession = async (user: DemoUser | null, event: string) => {
     session = user ? { user: { id: user.id, email: user.email } } : null;
     try {
@@ -131,15 +140,28 @@ export function createDemoClient(): SupabaseClient {
         return ok([group]);
       }
       case 'group_members':
-        if (!isMember(row.group_id, me()))
+        // Membership only comes from creating a group or accepting an invite.
+        return fail('new row violates row-level security policy');
+      case 'group_invites':
+        if (!isMember(row.group_id, me()) || isMember(row.group_id, row.invited_user)) {
           return fail('new row violates row-level security policy');
-        if (isMember(row.group_id, row.user_id)) {
+        }
+        if (
+          tables.group_invites.some(
+            (i) => i.group_id === row.group_id && i.invited_user === row.invited_user,
+          )
+        ) {
           return fail(
-            'duplicate key value violates unique constraint "group_members_pkey"',
+            'duplicate key value violates unique constraint "group_invites_one_per_person"',
             '23505',
           );
         }
-        tables.group_members.push(row);
+        tables.group_invites.push({
+          id: newId('invite'),
+          invited_by: me(),
+          created_at: new Date().toISOString(),
+          ...row,
+        });
         return ok();
       case 'settlements':
         if (
@@ -174,12 +196,22 @@ export function createDemoClient(): SupabaseClient {
       }
       case 'group_members': {
         const leaving = tables.group_members.filter((m) => matches(m) && m.user_id === me());
-        if (leaving.some((m) => balance(m.group_id, m.user_id) !== 0)) {
+        if (
+          leaving.some(
+            (m) => hasOwnActivity(m.group_id, m.user_id) && balance(m.group_id, m.user_id) !== 0,
+          )
+        ) {
           return fail('Settle up before leaving this group.', '23514');
         }
         tables.group_members = tables.group_members.filter((m) => !leaving.includes(m));
         return ok();
       }
+      case 'group_invites':
+        // The invited person declines, or a member withdraws.
+        tables.group_invites = tables.group_invites.filter(
+          (i) => !(matches(i) && (i.invited_user === me() || isMember(i.group_id, me()))),
+        );
+        return ok();
       default:
         return fail(`Demo mode does not support deleting from ${table}.`);
     }
@@ -255,6 +287,45 @@ export function createDemoClient(): SupabaseClient {
       if (!session) return fail('JWT expired');
       if (name === 'get_my_profile') {
         return ok(users.filter((user) => user.id === me()).map(profile));
+      }
+      if (name === 'get_my_invites') {
+        return ok(
+          tables.group_invites
+            .filter((invite) => invite.invited_user === me())
+            .sort(newestFirst)
+            .map((invite) => ({
+              id: invite.id,
+              group_id: invite.group_id,
+              group_name: str(tables.groups.find((g) => g.id === invite.group_id)?.name ?? ''),
+              invited_by_name: memberById(invite.invited_by)?.display_name ?? null,
+              member_count: tables.group_members.filter((m) => m.group_id === invite.group_id)
+                .length,
+              created_at: invite.created_at,
+            })),
+        );
+      }
+      if (name === 'get_group_invites') {
+        if (!isMember(args.p_group_id, me())) return ok([]);
+        return ok(
+          tables.group_invites
+            .filter((invite) => invite.group_id === args.p_group_id)
+            .sort(newestFirst)
+            .map((invite) => ({
+              id: invite.id,
+              invited_user: invite.invited_user,
+              display_name: memberById(invite.invited_user)?.display_name ?? '',
+              created_at: invite.created_at,
+            })),
+        );
+      }
+      if (name === 'accept_group_invite') {
+        const invite = tables.group_invites.find(
+          (candidate) => candidate.id === args.p_invite_id && candidate.invited_user === me(),
+        );
+        if (!invite) return fail('This invite is no longer available.', '23514');
+        tables.group_members.push({ group_id: invite.group_id, user_id: me() });
+        tables.group_invites = tables.group_invites.filter((candidate) => candidate !== invite);
+        return ok(invite.group_id);
       }
       if (name === 'find_user_by_email') {
         const email = str(args.search_email).trim().toLowerCase();

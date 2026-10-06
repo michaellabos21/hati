@@ -47,7 +47,7 @@ function Settle({ view, userId }: { view: GroupView; userId: string }) {
         <EmptyState
           emoji="👋"
           title="No one to settle with"
-          body="Add someone to the group first."
+          body="Invite someone to the group first."
         />
       </Screen>
     );

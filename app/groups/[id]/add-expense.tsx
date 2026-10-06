@@ -110,11 +110,11 @@ function AddExpense({ view, userId }: { view: GroupView; userId: string }) {
       <Screen>
         <EmptyState
           emoji="👋"
-          title="Add someone first"
-          body="You need at least one other person in the group to split an expense with."
+          title="Invite someone first"
+          body="You need at least one other member to split with. People you have invited count once they accept."
           action={
             <Button
-              label="Add a member"
+              label="Invite someone"
               onPress={() =>
                 router.replace({ pathname: '/groups/[id]/add-member', params: { id: group.id } })
               }

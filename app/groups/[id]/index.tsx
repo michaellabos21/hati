@@ -33,7 +33,7 @@ export default function GroupDetailScreen() {
         if (view.group.members.length === 1) {
           return (
             <Button
-              label="Add a member"
+              label="Invite someone"
               icon={<Ionicons name="person-add-outline" size={18} color={colors.ink} />}
               onPress={() => router.push({ pathname: '/groups/[id]/add-member', params: { id } })}
             />
@@ -118,8 +118,8 @@ function GroupDetail({ view, userId }: { view: GroupView; userId: string }) {
         <FadeIn order={2}>
           <EmptyState
             emoji="👋"
-            title="Add your barkada"
-            body="A group needs at least one more person before there is anything to split."
+            title="Invite your barkada"
+            body="Send an invite by email. Once they accept, you can start splitting."
           />
         </FadeIn>
       ) : (
@@ -158,11 +158,11 @@ function GroupDetail({ view, userId }: { view: GroupView; userId: string }) {
           title={`Members · ${group.members.length}`}
           trailing={
             <Button
-              label="Add"
+              label="Invite"
               variant="secondary"
               compact
               icon={<Ionicons name="person-add-outline" size={16} color={colors.ink} />}
-              accessibilityHint="Add a member to this group"
+              accessibilityHint="Invite someone to this group"
               onPress={() =>
                 router.push({ pathname: '/groups/[id]/add-member', params: { id: group.id } })
               }

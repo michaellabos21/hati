@@ -1,3 +1,4 @@
+import { useQueryClient } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
 
@@ -27,7 +28,11 @@ type LedgerScreenProps = {
  */
 export function LedgerScreen({ safeTop, children, footer, bare }: LedgerScreenProps) {
   const ledger = useLedger();
-  const { refreshing, onRefresh } = usePullToRefresh(ledger.refetch);
+  const queryClient = useQueryClient();
+  // Pulling down refreshes everything on screen (the ledger, invites, profile), not just the ledger.
+  const { refreshing, onRefresh } = usePullToRefresh(() =>
+    queryClient.refetchQueries({ type: 'active' }),
+  );
 
   if (ledger.data === undefined) {
     return (

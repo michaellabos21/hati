@@ -24,6 +24,10 @@ const RULES: { test: (message: string, code: string) => boolean; text: string | 
     text: 'Too many tries. Wait a minute and try again.',
   },
   {
+    test: (m, code) => code === '23505' && /group_invites/.test(m),
+    text: 'They already have an invite to this group.',
+  },
+  {
     test: (m, code) => code === '23505' && /group_members/.test(m),
     text: 'They are already in this group.',
   },

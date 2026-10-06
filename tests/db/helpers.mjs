@@ -94,3 +94,19 @@ export async function asUser(db, userId, fn) {
     await db.query(`select set_config('request.jwt.claim.sub', '', false)`);
   }
 }
+
+/**
+ * Adds someone to a group the way the app does: a member invites them and they accept.
+ * Call it outside any asUser block.
+ */
+export async function joinGroup(db, groupId, inviterId, inviteeId) {
+  const invite = await asUser(db, inviterId, () =>
+    db.query(
+      'insert into public.group_invites (group_id, invited_user) values ($1, $2) returning id',
+      [groupId, inviteeId],
+    ),
+  );
+  await asUser(db, inviteeId, () =>
+    db.query('select public.accept_group_invite($1)', [invite.rows[0].id]),
+  );
+}

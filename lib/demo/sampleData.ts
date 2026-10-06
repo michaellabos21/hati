@@ -15,6 +15,7 @@ export type DemoRow = Record<string, unknown>;
 export type DemoTables = {
   groups: DemoRow[];
   group_members: DemoRow[];
+  group_invites: DemoRow[];
   expenses: DemoRow[];
   expense_splits: DemoRow[];
   settlements: DemoRow[];
@@ -65,7 +66,7 @@ export function createSampleUsers(): DemoUser[] {
       gcash_number: null,
       maya_number: null,
     },
-    // Has an account but is in no group yet, so "Add member" has someone to find.
+    // Has an account but is in no group yet, so there is someone new to invite.
     {
       id: 'demo-dani',
       email: 'dani@example.com',
@@ -93,8 +94,25 @@ export function createSampleTables(): DemoTables {
         created_by: 'demo-juan',
         created_at: minutesAgo(40 * DAY),
       },
+      // Michael is invited here but has not joined, so Home shows an invite to answer.
+      {
+        id: 'demo-research',
+        name: 'Research Project',
+        description: 'Thesis group expenses',
+        created_by: 'demo-ana',
+        created_at: minutesAgo(2 * DAY),
+      },
     ],
     group_members: [],
+    group_invites: [
+      {
+        id: 'demo-invite-1',
+        group_id: 'demo-research',
+        invited_user: 'demo-michael',
+        invited_by: 'demo-ana',
+        created_at: minutesAgo(2 * HOUR),
+      },
+    ],
     expenses: [],
     expense_splits: [],
     settlements: [
@@ -115,6 +133,9 @@ export function createSampleTables(): DemoTables {
   for (const user_id of barkada) tables.group_members.push({ group_id: 'demo-boracay', user_id });
   for (const user_id of flatmates)
     tables.group_members.push({ group_id: 'demo-apartment', user_id });
+  for (const user_id of ['demo-ana', 'demo-bea']) {
+    tables.group_members.push({ group_id: 'demo-research', user_id });
+  }
 
   let next = 1;
   const addEqualExpense = (

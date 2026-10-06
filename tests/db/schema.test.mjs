@@ -3,7 +3,15 @@ import { before, describe, it } from 'node:test';
 
 import { createDatabase, createUser, insertExpenseWithSplits } from './helpers.mjs';
 
-const TABLES = ['profiles', 'groups', 'group_members', 'expenses', 'expense_splits', 'settlements'];
+const TABLES = [
+  'profiles',
+  'groups',
+  'group_members',
+  'expenses',
+  'expense_splits',
+  'settlements',
+  'group_invites',
+];
 
 let db;
 let michael;

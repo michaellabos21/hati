@@ -95,11 +95,31 @@ for (const name of barkada.slice(1)) {
   );
   assert.equal(found.length, 1, `find_user_by_email should find ${name}`);
   must(
-    await clients.Michael.from('group_members').insert({ group_id: group, user_id: found[0].id }),
-    `add ${name}`,
+    await clients.Michael.from('group_invites').insert({
+      group_id: group,
+      invited_user: found[0].id,
+    }),
+    `invite ${name}`,
+  );
+  const direct = await clients.Michael.from('group_members').insert({
+    group_id: group,
+    user_id: found[0].id,
+  });
+  assert.ok(direct.error, 'a member must not be able to add someone without their consent');
+  const waiting = must(await clients[name].rpc('get_my_invites'), `${name} reads invites`);
+  assert.equal(waiting.length, 1);
+  assert.equal(waiting[0].group_name, 'Boracay 2026');
+  assert.equal(
+    must(await clients[name].from('groups').select('id'), `${name} reads groups`).length,
+    0,
+    'an invited person should not see the group before accepting',
+  );
+  must(
+    await clients[name].rpc('accept_group_invite', { p_invite_id: waiting[0].id }),
+    `${name} accepts`,
   );
 }
-step('Michael created "Boracay 2026" and added four members by email');
+step('Michael created "Boracay 2026"; four people were invited by email and each accepted');
 
 // --- Expenses (several payers) ------------------------------------------------------------
 const equalSplits = (pesos, people) => {
@@ -168,7 +188,14 @@ step('Balances are exact: everyone’s share is ₱1,840');
 
 // --- Security -----------------------------------------------------------------------------
 const outsider = clients.Dayo;
-for (const table of ['groups', 'group_members', 'expenses', 'expense_splits', 'settlements']) {
+for (const table of [
+  'groups',
+  'group_members',
+  'group_invites',
+  'expenses',
+  'expense_splits',
+  'settlements',
+]) {
   assert.equal(must(await outsider.from(table).select('*'), `outsider reads ${table}`).length, 0);
 }
 assert.equal(
