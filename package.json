@@ -13,7 +13,8 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "jest",
-    "check:supabase": "node --env-file=.env scripts/check-supabase.mjs"
+    "check:supabase": "node --env-file=.env scripts/check-supabase.mjs",
+    "test:db": "node --test \"tests/db/*.test.mjs\""
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.2",
@@ -35,6 +36,7 @@
     "react-native-web": "~0.21.0"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8",
     "@types/jest": "29.5.14",
     "@types/react": "~19.2.2",
     "eslint": "^9.39.5",
