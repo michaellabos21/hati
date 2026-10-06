@@ -35,6 +35,7 @@ export function createDemoClient(): SupabaseClient {
   const tables: DemoTables = createSampleTables();
   const listeners = new Set<AuthListener>();
   let session: DemoSession | null = null;
+  const premiumInterest = new Set<string>();
   let counter = 1;
   const newId = (kind: string) => `demo-${kind}-new-${counter++}`;
 
@@ -121,6 +122,8 @@ export function createDemoClient(): SupabaseClient {
         );
       case 'settlements':
         return ok(tables.settlements.filter((s) => mine.has(s.group_id)).sort(newestFirst));
+      case 'premium_interest':
+        return ok(premiumInterest.has(me()) ? [{ user_id: me() }] : []);
       default:
         return fail(`Demo mode does not support reading ${table}.`);
     }
@@ -139,6 +142,15 @@ export function createDemoClient(): SupabaseClient {
         tables.group_members.push({ group_id: group.id, user_id: me() });
         return ok([group]);
       }
+      case 'premium_interest':
+        if (premiumInterest.has(me())) {
+          return fail(
+            'duplicate key value violates unique constraint "premium_interest_pkey"',
+            '23505',
+          );
+        }
+        premiumInterest.add(me());
+        return ok();
       case 'group_members':
         // Membership only comes from creating a group or accepting an invite.
         return fail('new row violates row-level security policy');

@@ -11,6 +11,7 @@ const TABLES = [
   'expense_splits',
   'settlements',
   'group_invites',
+  'premium_interest',
 ];
 
 let db;

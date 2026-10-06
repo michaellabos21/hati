@@ -1,10 +1,13 @@
+import { Ionicons } from '@expo/vector-icons';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { StyleSheet, View } from 'react-native';
 
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
+import { Card } from '@/components/ui/Card';
 import { Field } from '@/components/ui/Field';
 import { Screen } from '@/components/ui/Screen';
 import { Section } from '@/components/ui/Section';
@@ -18,6 +21,7 @@ import { confirm } from '@/lib/confirm';
 import { toMessage } from '@/lib/errors';
 
 export default function ProfileScreen() {
+  const router = useRouter();
   const userId = useUserId();
   const { session } = useAuth();
   const profile = useProfile(userId);
@@ -158,6 +162,20 @@ export default function ProfileScreen() {
         </View>
       </Section>
 
+      <Card
+        onPress={() => router.push('/premium')}
+        accessibilityLabel="HATI Premium, coming soon. See what is planned.">
+        <View style={styles.premium}>
+          <View style={styles.identityText}>
+            <Text variant="bodyBold">HATI Premium ✨</Text>
+            <Text variant="small" color={colors.inkSoft}>
+              Coming soon. See what’s planned.
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={colors.inkFaint} />
+        </View>
+      </Card>
+
       <View style={styles.form}>
         <FormError message={logoutError} />
         <Button label="Log out" variant="secondary" onPress={onLogOut} />
@@ -177,5 +195,10 @@ const styles = StyleSheet.create({
   },
   form: {
     gap: spacing.lg,
+  },
+  premium: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
   },
 });

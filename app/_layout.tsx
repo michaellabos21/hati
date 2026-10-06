@@ -100,6 +100,7 @@ function RootNavigator() {
         <Stack.Screen name="groups/[id]/settle" options={{ title: 'Record a payment' }} />
         <Stack.Screen name="groups/[id]/remind" options={{ title: 'Send a reminder' }} />
         <Stack.Screen name="expenses/[id]" options={{ title: 'Expense' }} />
+        <Stack.Screen name="premium" options={{ title: '' }} />
       </Stack.Protected>
       <Stack.Protected guard={session === null}>
         <Stack.Screen name="auth/welcome" options={{ headerShown: false }} />

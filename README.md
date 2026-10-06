@@ -117,6 +117,12 @@ One deliberate difference from the brief: section 8 writes the settlement signs 
 `+ received - sent`, which would double a debt each time it was paid. The engine uses
 `+ sent - received`, and the tests cover it.
 
+## Premium (not for sale yet)
+
+Profile links to a Premium screen listing the planned paid tier (₱99/month). Nothing is
+charged and nothing is locked: "Try Premium" only records interest. To see demand, run
+`select count(*) from public.premium_interest;` in the Supabase SQL editor.
+
 ## Known limits
 
 - People are invited by exact email and join only if they accept. There are no invite links

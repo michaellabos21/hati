@@ -212,3 +212,26 @@ describe('leaving', () => {
     await asUser(db, michael, () => assert.rejects(leave(michael), /Settle up before leaving/));
   });
 });
+
+describe('premium interest', () => {
+  const register = () => db.query('insert into public.premium_interest default values');
+  const mine = async () => (await db.query('select user_id from public.premium_interest')).rows;
+
+  it('records one row per person, visible only to them', async () => {
+    await asUser(db, michael, async () => {
+      assert.deepEqual(await mine(), []);
+      await register();
+      assert.deepEqual(await mine(), [{ user_id: michael }]);
+      await assert.rejects(register(), /premium_interest_pkey/);
+    });
+    await asUser(db, ana, async () => {
+      assert.deepEqual(await mine(), []);
+      await assert.rejects(
+        db.query('insert into public.premium_interest (user_id) values ($1)', [juan]),
+        /row-level security/,
+      );
+    });
+    const all = await db.query('select count(*)::int as n from public.premium_interest');
+    assert.equal(all.rows[0].n, 1);
+  });
+});
