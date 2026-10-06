@@ -9,7 +9,8 @@ its tasks in order (TASK 001–021).
 ## Status
 
 - [x] TASK 001 — Project initialization (Expo + TypeScript + Expo Router shell, lint, tests)
-- [ ] TASK 002 — Supabase configuration
+- [x] TASK 002 — Supabase client and env validation (live connection check pending credentials)
+- [ ] TASK 003 — Database migrations
 
 ## Stack
 
@@ -22,20 +23,22 @@ its tasks in order (TASK 001–021).
 
 ```bash
 npm install
-cp .env.example .env   # fill in from TASK 002 onwards
+cp .env.example .env   # add your Supabase URL and anon key
+npm run check:supabase # confirm the project is reachable
 npm start              # then press i / a / w, or: npm run web
 ```
 
 ## Scripts
 
-| Script              | What it does                    |
-| ------------------- | ------------------------------- |
-| `npm start`         | Start the Expo dev server       |
-| `npm run web`       | Start and open in a web browser |
-| `npm run typecheck` | `tsc --noEmit`                  |
-| `npm run lint`      | ESLint via `expo lint`          |
-| `npm test`          | Jest unit tests in `tests/`     |
-| `npm run format`    | Format with Prettier            |
+| Script                   | What it does                                       |
+| ------------------------ | -------------------------------------------------- |
+| `npm start`              | Start the Expo dev server                          |
+| `npm run web`            | Start and open in a web browser                    |
+| `npm run typecheck`      | `tsc --noEmit`                                     |
+| `npm run lint`           | ESLint via `expo lint`                             |
+| `npm test`               | Jest unit tests in `tests/`                        |
+| `npm run format`         | Format with Prettier                               |
+| `npm run check:supabase` | Verify the Supabase project in `.env` is reachable |
 
 ## Structure
 
