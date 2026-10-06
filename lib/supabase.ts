@@ -40,7 +40,9 @@ const client: SupabaseClient | null = DEMO_MODE
           storage: canPersistSession ? AsyncStorage : undefined,
           persistSession: canPersistSession,
           autoRefreshToken: canPersistSession,
-          detectSessionInUrl: false,
+          // On web, the email confirmation link lands back on the site with the session in the
+        // URL; picking it up signs the new user straight in.
+        detectSessionInUrl: Platform.OS === 'web',
         },
       })
     : null;
