@@ -1,0 +1,7 @@
+node_modules
+.expo
+dist
+coverage
+package-lock.json
+MVP_PLAN.md
+assets
