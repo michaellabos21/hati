@@ -2,78 +2,128 @@
 
 **"Sino may bayad? Sino may utang? Hati na."**
 
-A Filipino-first expense splitting app for barkadas, trips, households and school groups.
-The full product and engineering brief is in [MVP_PLAN.md](MVP_PLAN.md); work proceeds through
-its tasks in order (TASK 001–021).
+A Filipino-first expense splitting app for barkadas, trips, households and school groups:
+create a group, add what people paid, see who owes who, send a "Paki-GCash" reminder, and record
+the payment. The product and engineering brief is [MVP_PLAN.md](MVP_PLAN.md).
 
 ## Status
 
-- [x] TASK 001 — Project initialization (Expo + TypeScript + Expo Router shell, lint, tests)
-- [x] TASK 002 — Supabase client and env validation (live connection check pending credentials)
-- [x] TASK 003 — Database migrations (verified in local Postgres; not yet applied to Supabase)
-- [ ] TASK 004 — RLS policies
+All 21 tasks in the brief are built. What has and has not been verified:
+
+| Area                                                               | Verified how                                                                                                                         |
+| ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
+| Money maths, splits, balances, debt simplification, reminders      | Unit tests (`npm test`)                                                                                                              |
+| Database schema, constraints, Row Level Security, server functions | Tests against an in-memory Postgres (`npm run test:db`)                                                                              |
+| Every screen and flow                                              | By hand in a browser at phone size, in demo mode                                                                                     |
+| Production bundles                                                 | `expo export` for web, iOS and Android                                                                                               |
+| **A real Supabase project**                                        | **Not yet.** No project has been configured. Run `npm run check:supabase` and `npm run seed` once it is (see below).                 |
+| **A phone or simulator**                                           | **Not yet.** Only the web build has been run. Keyboard behaviour, safe areas and the native share sheet still need a pass on device. |
+
+## Quick start (demo mode, no backend)
+
+```bash
+npm install
+cp .env.example .env    # demo mode is on by default
+npm run web             # or: npm start, then press i / a
+```
+
+Tap **Explore with sample data**. You are signed in as Michael in the "Boracay 2026" group from
+the brief (five people, four expenses, several payers). Other demo accounts (`juan@`, `ana@`,
+`bea@`, `carlo@`, `dani@example.com`) all use the password `password`.
+
+Demo mode keeps everything in memory: nothing is saved and reloading resets the data. Every data
+screen shows a "Demo mode" banner. It is only active when `EXPO_PUBLIC_DEMO_MODE=true`.
+
+## Connecting Supabase
+
+1. Create a Supabase project.
+2. Apply the migrations in `supabase/migrations/` in filename order, either by pasting each file
+   into the SQL editor or with the CLI (`supabase link`, then `supabase db push`).
+3. In `.env`, set `EXPO_PUBLIC_DEMO_MODE=false` and fill in `EXPO_PUBLIC_SUPABASE_URL` and
+   `EXPO_PUBLIC_SUPABASE_ANON_KEY`.
+4. `npm run check:supabase` confirms the project is reachable.
+5. Optional but recommended: add `SUPABASE_SERVICE_ROLE_KEY` to `.env` and run `npm run seed`.
+   It creates six test accounts, loads the Boracay 2026 scenario through the public API, and
+   checks balances and security rules against the live project. The service role key is used
+   only by that script; never give it an `EXPO_PUBLIC_` prefix.
+
+If email confirmation is on in Supabase Auth, new users are asked to confirm before logging in.
+
+## Scripts
+
+| Script                   | What it does                                                              |
+| ------------------------ | ------------------------------------------------------------------------- |
+| `npm start`              | Start the Expo dev server                                                 |
+| `npm run web`            | Start and open in a web browser                                           |
+| `npm run typecheck`      | `tsc --noEmit`                                                            |
+| `npm run lint`           | ESLint via `expo lint`                                                    |
+| `npm test`               | Jest unit tests in `tests/`                                               |
+| `npm run test:db`        | Apply the migrations to an in-memory Postgres and test rules and policies |
+| `npm run check:supabase` | Verify the Supabase project in `.env` is reachable                        |
+| `npm run seed`           | Seed a live Supabase project and verify it end to end                     |
+| `npm run format`         | Format with Prettier                                                      |
+
+Route types are generated by the dev server; run `npm start` once before `npm run typecheck` on a
+fresh clone.
 
 ## Stack
 
 - Expo SDK 57, React Native, TypeScript, Expo Router
-- Styling: plain `StyleSheet` with design tokens in `constants/theme.ts` (no other styling library)
-- Supabase (Postgres, Auth, RLS) — added from TASK 002
-- Jest (`jest-expo`), ESLint (`eslint-config-expo`), Prettier
-
-## Getting started
-
-```bash
-npm install
-cp .env.example .env   # add your Supabase URL and anon key
-npm run check:supabase # confirm the project is reachable
-npm start              # then press i / a / w, or: npm run web
-```
-
-## Scripts
-
-| Script                   | What it does                                                       |
-| ------------------------ | ------------------------------------------------------------------ |
-| `npm start`              | Start the Expo dev server                                          |
-| `npm run web`            | Start and open in a web browser                                    |
-| `npm run typecheck`      | `tsc --noEmit`                                                     |
-| `npm run lint`           | ESLint via `expo lint`                                             |
-| `npm test`               | Jest unit tests in `tests/`                                        |
-| `npm run format`         | Format with Prettier                                               |
-| `npm run test:db`        | Apply the migrations to an in-memory Postgres and test constraints |
-| `npm run check:supabase` | Verify the Supabase project in `.env` is reachable                 |
+- Supabase: Postgres, Auth, Row Level Security
+- TanStack Query for server state, React Hook Form + Zod for forms
+- Styling: plain `StyleSheet` with design tokens in `constants/theme.ts`. Colours are the Mulave
+  Studios brand (logo green `#01EC0B` on near-black `#060906`).
 
 ## Structure
 
 ```text
 app/                  Routes (Expo Router). Screens only, no business logic.
   (tabs)/             Home, Groups, Activity, Profile
-  auth/               login, signup
-  groups/             create, [id]/ (detail, add-expense, settle)
+  auth/               welcome, login, signup
+  groups/             create, pick, [id]/ (detail, add-expense, add-member, balances, settle, remind)
   expenses/[id].tsx
-components/           Shared UI
-constants/            Design tokens, app name/tagline
-features/             auth, groups, expenses, balances, settlements (pure logic + data access)
-lib/                  supabase client, currency, calculations
-hooks/  types/
-supabase/migrations/  SQL migrations and RLS policies
-tests/                Jest tests
+components/           Shared UI (components/ui is the design system)
+constants/            Design tokens, app name and tagline
+features/
+  balances/           calculateGroupBalances, simplifyDebts (pure)
+  expenses/           splitEqually, validateExpense (pure) and mutations
+  ledger/             One query for everything the user can see, plus pure selectors
+  auth/ groups/ settlements/
+lib/                  Supabase client, currency, dates, errors, demo mode
+supabase/migrations/  Schema, RLS policies, server functions
+scripts/              check-supabase, seed
+tests/                Jest tests; tests/db are Postgres tests
 ```
 
 Import with the `@/` alias, e.g. `import { colors } from '@/constants/theme'`.
 
-## Engineering rules (from the brief)
+## How it works
 
-1. Money is handled in integer centavos; no floating-point arithmetic on currency.
-2. Financial calculations are pure functions under `features/` and `lib/`, never inside components.
-3. The server is authoritative: every table has Row Level Security.
-4. Keep the MVP small: expense → balance → settlement.
+- **Money is integer centavos** everywhere in the app. Pesos with decimals exist only at the
+  edges: what the user types, the database's `numeric(12,2)` columns, and display.
+- **One ledger query.** Screens share a single query that loads the user's groups, expenses and
+  settlements in three requests; balances are derived from it with pure functions. Any change
+  invalidates it, and it refetches when the app returns to the foreground.
+- **The server is authoritative.** Row Level Security scopes everything to group membership.
+  An expense and its splits are written by one database function and must add up exactly. Only
+  the person who recorded an expense can delete it. Only the payer or payee can record a
+  payment. A member cannot leave while they owe or are owed money.
+- **Wallet numbers are private.** GCash and Maya numbers are readable only by their owner; a
+  reminder includes the sender's own number.
 
-## Database
+One deliberate difference from the brief: section 8 writes the settlement signs as
+`+ received - sent`, which would double a debt each time it was paid. The engine uses
+`+ sent - received`, and the tests cover it.
 
-Migrations live in `supabase/migrations/` and are applied in filename order. To apply them to a
-hosted project, either paste each file into the Supabase SQL editor or use the Supabase CLI
-(`supabase link` then `supabase db push`).
+## Known limits
 
-`npm run test:db` applies the migrations to an in-memory Postgres (PGlite) with Supabase's `auth`
-schema stubbed, and checks constraints, cascades and that RLS is enabled. It verifies the SQL, not
-the hosted project.
+- Members are added by exact email and do not have to accept. They can leave if they are
+  settled up. Invite links are on the brief's V2 list.
+- Someone who created a group and later left can still read that group's name and description
+  (not its members or money).
+- Expenses cannot be edited, only deleted and re-added by whoever recorded them. Payments
+  cannot be edited or deleted.
+- Someone who has left a group shows as "Former member" on its old expenses.
+- The ledger loads everything in one go, which suits the beta's size; it will need paging
+  beyond roughly a thousand expenses per user.
+- Light appearance only. No push notifications; reminders are copied or shared by hand.

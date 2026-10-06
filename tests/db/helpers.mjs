@@ -11,7 +11,11 @@ const SUPABASE_STUB = `
   create role anon nologin;
   create role authenticated nologin;
   create schema auth;
-  create table auth.users (id uuid primary key default gen_random_uuid(), email text unique);
+  create table auth.users (
+    id uuid primary key default gen_random_uuid(),
+    email text unique,
+    raw_user_meta_data jsonb
+  );
   create function auth.uid() returns uuid language sql stable as $$
     select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid
   $$;
@@ -30,12 +34,63 @@ export async function createDatabase() {
   return db;
 }
 
-/** Creates an auth user plus profile and returns the user id. */
+/** Signs up a user (the profile is created by the on_auth_user_created trigger). */
 export async function createUser(db, name) {
-  const { rows } = await db.query('insert into auth.users (email) values ($1) returning id', [
-    `${name.toLowerCase()}@example.com`,
-  ]);
-  const id = rows[0].id;
-  await db.query('insert into public.profiles (id, display_name) values ($1, $2)', [id, name]);
-  return id;
+  const { rows } = await db.query(
+    'insert into auth.users (email, raw_user_meta_data) values ($1, $2) returning id',
+    [emailFor(name), JSON.stringify({ display_name: name })],
+  );
+  return rows[0].id;
+}
+
+export const emailFor = (name) => `${name.toLowerCase()}@example.com`;
+
+/**
+ * Writes an expense and its splits in one transaction, the way create_expense does, but with
+ * direct inserts so tests can exercise the tables and policies themselves.
+ * `splits` is a list of [userId, amount].
+ */
+export async function insertExpenseWithSplits(db, expense, splits) {
+  const row = { description: 'Dinner', split_method: 'exact', ...expense };
+  await db.exec('begin');
+  try {
+    const { rows } = await db.query(
+      `insert into public.expenses (group_id, description, amount, paid_by, split_method, created_by)
+       values ($1, $2, $3, $4, $5, coalesce($6, auth.uid())) returning id`,
+      [
+        row.group_id,
+        row.description,
+        row.amount,
+        row.paid_by,
+        row.split_method,
+        row.created_by ?? null,
+      ],
+    );
+    for (const [userId, amount] of splits) {
+      await db.query(
+        'insert into public.expense_splits (expense_id, user_id, amount_owed) values ($1, $2, $3)',
+        [rows[0].id, userId, amount],
+      );
+    }
+    await db.exec('commit');
+    return rows[0].id;
+  } catch (error) {
+    await db.exec('rollback');
+    throw error;
+  }
+}
+
+/**
+ * Runs `fn` as a signed-in user: the `authenticated` role with auth.uid() returning `userId`.
+ * Pass null for a request with no user.
+ */
+export async function asUser(db, userId, fn) {
+  await db.query(`select set_config('request.jwt.claim.sub', $1, false)`, [userId ?? '']);
+  await db.exec('set role authenticated');
+  try {
+    return await fn();
+  } finally {
+    await db.exec('reset role');
+    await db.query(`select set_config('request.jwt.claim.sub', '', false)`);
+  }
 }

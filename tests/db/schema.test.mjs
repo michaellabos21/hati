@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { before, describe, it } from 'node:test';
 
-import { createDatabase, createUser } from './helpers.mjs';
+import { createDatabase, createUser, insertExpenseWithSplits } from './helpers.mjs';
 
 const TABLES = ['profiles', 'groups', 'group_members', 'expenses', 'expense_splits', 'settlements'];
 
@@ -18,29 +18,16 @@ async function createGroup(name = 'Boracay 2026') {
   return rows[0].id;
 }
 
-async function createExpense(overrides = {}) {
+/** An expense Michael paid and recorded, owed entirely by Juan unless splits are given. */
+function createExpense(overrides = {}, splits) {
   const expense = {
     group_id: groupId,
-    description: 'Dinner',
     amount: '2400.00',
     paid_by: michael,
     created_by: michael,
-    split_method: 'equal',
     ...overrides,
   };
-  const { rows } = await db.query(
-    `insert into public.expenses (group_id, description, amount, paid_by, created_by, split_method)
-     values ($1, $2, $3, $4, $5, $6) returning id`,
-    [
-      expense.group_id,
-      expense.description,
-      expense.amount,
-      expense.paid_by,
-      expense.created_by,
-      expense.split_method,
-    ],
-  );
-  return rows[0].id;
+  return insertExpenseWithSplits(db, expense, splits ?? [[juan, expense.amount]]);
 }
 
 const rejects = (promise, constraint) =>
@@ -54,9 +41,9 @@ before(async () => {
   michael = await createUser(db, 'Michael');
   juan = await createUser(db, 'Juan');
   groupId = await createGroup();
-  await db.query('insert into public.group_members (group_id, user_id) values ($1, $2), ($1, $3)', [
+  // Michael is added as a member by the groups trigger.
+  await db.query('insert into public.group_members (group_id, user_id) values ($1, $2)', [
     groupId,
-    michael,
     juan,
   ]);
 });
@@ -71,17 +58,12 @@ describe('schema', () => {
     assert.ok(rows.every((row) => row.relrowsecurity));
   });
 
-  it('denies API roles everything until policies exist', async () => {
-    await db.exec('set role authenticated');
+  it('gives the anon role no access to any table', async () => {
+    await db.exec('set role anon');
     try {
       for (const table of TABLES) {
-        const { rows } = await db.query(`select count(*)::int as n from public.${table}`);
-        assert.equal(rows[0].n, 0, `${table} should expose no rows`);
+        await rejects(db.query(`select 1 from public.${table}`), 'permission denied');
       }
-      await rejects(
-        db.query('insert into public.groups (name) values ($1)', ['Sneaky']),
-        'row-level security',
-      );
     } finally {
       await db.exec('reset role');
     }
@@ -147,24 +129,70 @@ describe('expenses and splits', () => {
   });
 
   it('allows one non-negative split per participant', async () => {
+    await rejects(
+      createExpense({}, [
+        [michael, '1200.00'],
+        [michael, '1200.00'],
+      ]),
+      'expense_splits_expense_user_unique',
+    );
+    await rejects(
+      createExpense({}, [
+        [michael, '2401.00'],
+        [juan, '-1'],
+      ]),
+      'expense_splits_amount_owed_non_negative',
+    );
+    await createExpense({}, [
+      [michael, '1200.00'],
+      [juan, '1200.00'],
+    ]);
+  });
+
+  it('requires splits that add up to the expense exactly', async () => {
+    await rejects(createExpense({}, []), 'at least one person');
+    await rejects(createExpense({}, [[juan, '2399.99']]), 'Splits total');
+    await rejects(
+      createExpense({}, [
+        [michael, '1200.00'],
+        [juan, '1200.01'],
+      ]),
+      'Splits total',
+    );
+  });
+
+  it('requires an equal split to be equal, allowing the leftover centavo', async () => {
+    await rejects(
+      createExpense({ split_method: 'equal', amount: '100.00' }, [
+        [michael, '70.00'],
+        [juan, '30.00'],
+      ]),
+      'equal split',
+    );
+    await createExpense({ split_method: 'equal', amount: '100.01' }, [
+      [michael, '50.01'],
+      [juan, '50.00'],
+    ]);
+  });
+
+  it('rejects tampering with a split after the fact', async () => {
     const id = await createExpense();
-    const insert = (user, amount) =>
-      db.query(
-        'insert into public.expense_splits (expense_id, user_id, amount_owed) values ($1, $2, $3)',
-        [id, user, amount],
-      );
-    await insert(michael, '1200.00');
-    await rejects(insert(michael, '1200.00'), 'expense_splits_expense_user_unique');
-    await rejects(insert(juan, '-1'), 'expense_splits_amount_owed_non_negative');
-    await insert(juan, '1200.00');
+    await rejects(
+      db.query('update public.expense_splits set amount_owed = 1 where expense_id = $1', [id]),
+      'Splits total',
+    );
+    await rejects(
+      db.query('delete from public.expense_splits where expense_id = $1', [id]),
+      'at least one person',
+    );
+    await rejects(
+      db.query('update public.expenses set amount = 1 where id = $1', [id]),
+      'Splits total',
+    );
   });
 
   it('deletes splits with their expense', async () => {
     const id = await createExpense();
-    await db.query(
-      'insert into public.expense_splits (expense_id, user_id, amount_owed) values ($1, $2, $3)',
-      [id, juan, '2400.00'],
-    );
     await db.query('delete from public.expenses where id = $1', [id]);
     const { rows } = await db.query(
       'select count(*)::int as n from public.expense_splits where expense_id = $1',
@@ -191,7 +219,12 @@ describe('settlements', () => {
 
 describe('deletion behaviour', () => {
   it('refuses to delete a profile that appears in money records', async () => {
-    await rejects(db.query('delete from auth.users where id = $1', [juan]), 'foreign key');
+    // Juan still owes money here, so leaving the group is refused; a settled user would
+    // instead be stopped by the foreign keys from the money tables.
+    await rejects(
+      db.query('delete from auth.users where id = $1', [juan]),
+      'Settle up|foreign key',
+    );
   });
 
   it('removes a profile with no money records, keeping groups it created', async () => {
@@ -200,10 +233,6 @@ describe('deletion behaviour', () => {
       'insert into public.groups (name, created_by) values ($1, $2) returning id',
       ['Apartment', carlo],
     );
-    await db.query('insert into public.group_members (group_id, user_id) values ($1, $2)', [
-      created[0].id,
-      carlo,
-    ]);
     await db.query('delete from auth.users where id = $1', [carlo]);
 
     const { rows } = await db.query('select created_by from public.groups where id = $1', [
@@ -219,15 +248,7 @@ describe('deletion behaviour', () => {
 
   it('deleting a group removes its members, expenses, splits and settlements', async () => {
     const temp = await createGroup('Temp');
-    await db.query('insert into public.group_members (group_id, user_id) values ($1, $2)', [
-      temp,
-      michael,
-    ]);
     const expense = await createExpense({ group_id: temp });
-    await db.query(
-      'insert into public.expense_splits (expense_id, user_id, amount_owed) values ($1, $2, $3)',
-      [expense, juan, '2400.00'],
-    );
     await db.query(
       'insert into public.settlements (group_id, from_user, to_user, amount) values ($1, $2, $3, $4)',
       [temp, juan, michael, '100'],

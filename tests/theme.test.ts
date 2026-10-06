@@ -8,7 +8,7 @@ describe('project foundation', () => {
   });
 
   it('defines design tokens', () => {
-    expect(colors.primary).toMatch(/^#[0-9A-F]{6}$/i);
+    expect(colors.brand).toMatch(/^#[0-9A-F]{6}$/i);
     expect(spacing.md).toBeGreaterThan(spacing.sm);
   });
 });
