@@ -46,6 +46,7 @@ example
 .env
 .env.*
 !.env.example
+!.env.production
 
 # test
 coverage/
